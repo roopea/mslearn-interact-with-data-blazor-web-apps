@@ -1,4 +1,116 @@
 @page "/"
+@using BlazingPizza.Data
+@inject PizzaService PizzaSvc
 
-<h1>Blazing Pizzas</h1>
-		
+@inject HttpClient HttpClient
+@inject NavigationManager NavigationManager
+
+@using BlazingPizza.Services
+@inject OrderState OrderState
+
+<div class="main">
+    <h1>Blazing Pizzas</h1>
+    <ul class="pizza-cards">
+        @if (specials != null)
+        {
+            @foreach (var special in specials)
+            {
+                <li @onclick="@(() => OrderState.ShowConfigurePizzaDialog(special))" style="background-image: url('@special.ImageUrl')">
+                    <div class="pizza-info">
+                        <span class="title">@special.Name</span>
+                        @special.Description
+                        <span class="price">@special.GetFormattedBasePrice()</span>
+                    </div>
+                </li>
+            }
+        }
+    </ul>
+    @if (todaysPizzas == null)
+    {
+        <p>We are finding out what pizzas are avalaible today...</p>
+    }
+    else
+    {
+        <table>
+            <thead>
+                <tr>
+                    <th>Pizza Name</th>
+                    <th>Description</th>
+                    <th>Vegetarian?</th>
+                    <th>Vegan?</th>
+                    <th>Price</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var pizza in todaysPizzas)
+                {
+                    <tr>
+                        <td>@pizza.Name</td>
+                        <td>@pizza.Description</td>
+                        <td>@pizza.Vegetarian</td>
+                        <td>@pizza.Vegan</td>
+                        <td>@pizza.Price</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@if (OrderState.ShowingConfigureDialog)
+{
+<ConfigurePizzaDialog Pizza="OrderState.ConfiguringPizza"
+                      OnCancel="OrderState.CancelConfigurePizzaDialog"
+                      OnConfirm="OrderState.ConfirmConfigurePizzaDialog" />
+}
+
+<div class="sidebar">
+    @if (OrderState.Order.Pizzas.Any())
+    {
+        <div class="order-contents">
+            <h2>Your order</h2>
+
+            @foreach (var configuredPizza in OrderState.Order.Pizzas)
+            {
+                <div class="cart-item">
+                    <div class="title">@(configuredPizza.Size)" @configuredPizza.Special.Name</div>
+                    <div class="item-price">
+                        @configuredPizza.GetFormattedTotalPrice()
+                    </div>
+                    <a @onclick="@(() => OrderState.RemoveConfiguredPizza(configuredPizza))" class="delete-item">x</a>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="empty-cart">Choose a pizza<br>to get started</div>
+    }
+
+    <div class="order-total @(OrderState.Order.Pizzas.Any() ? "" : "hidden")">
+        Total:
+        <span class="total-price">@OrderState.Order.GetFormattedTotalPrice()</span>
+        <a href="checkout" class="@(OrderState.Order.Pizzas.Count == 0 ? "btn btn-warning disabled" : "btn btn-warning")">
+            Order >
+        </a>
+    </div>    
+</div>
+
+
+@code
+{
+    private List<PizzaSpecial> specials = new();
+    private Data.Pizza[] todaysPizzas;
+    private string rawResponse;
+    private string url;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        todaysPizzas = await PizzaSvc.GetPizzasAsync();
+        url = NavigationManager.BaseUri + "specials";
+        rawResponse = await (await HttpClient.GetAsync(NavigationManager.BaseUri + "specials")).Content.ReadAsStringAsync();
+
+        specials = await HttpClient.GetFromJsonAsync<List<PizzaSpecial>>(NavigationManager.BaseUri + "specials");
+    }
+}
